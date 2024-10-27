@@ -2,28 +2,20 @@ from enum import IntEnum
 
 import sqlalchemy as sa
 from alembic import op
-from nonebot.log import logger
 from sqlalchemy import inspect
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from strenum import StrEnum
 
 
-def check_tables() -> bool:
+def check_tables():
     conn = op.get_bind()
     insp = inspect(conn)
     table_names = insp.get_table_names()
     if "nonebot_plugin_session_orm_sessionmodel" not in table_names:
-        logger.warning(
-            "表 nonebot_plugin_session_orm_sessionmodel 不存在，可能无需迁移"
-        )
-        return False
+        raise ValueError("表 nonebot_plugin_session_orm_sessionmodel 不存在")
     if "nonebot_plugin_uninfo_sessionmodel" not in table_names:
-        logger.warning(
-            "表 nonebot_plugin_uninfo_sessionmodel 不存在，"
-            "请先安装 nonebot-plugin-uninfo 插件并初始化数据库后再迁移"
-        )
-        return False
+        raise ValueError("表 nonebot_plugin_uninfo_sessionmodel 不存在")
     if "nonebot_session_to_uninfo_id_map" not in table_names:
         op.create_table(
             "nonebot_session_to_uninfo_id_map",
@@ -36,8 +28,6 @@ def check_tables() -> bool:
             sa.UniqueConstraint("session_id", "uninfo_id", name="unique_map"),
             info={"bind_key": "nonebot_session_to_uninfo"},
         )
-        logger.info("创建 nonebot_session_to_uninfo_id_map 表")
-    return True
 
 
 class _SupportedPlatform(StrEnum):

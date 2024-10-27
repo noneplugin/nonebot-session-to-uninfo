@@ -10,7 +10,6 @@ repository = "https://github.com/noneplugin/nonebot-session-to-uninfo"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-nonebot2 = "^2.3.0"
 alembic = "^1.13"
 sqlalchemy = "^2.0"
 strenum = "^0.4.15"
