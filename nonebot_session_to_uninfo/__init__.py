@@ -14,6 +14,12 @@ def check_tables():
     table_names = insp.get_table_names()
     if "nonebot_plugin_session_orm_sessionmodel" not in table_names:
         raise ValueError("表 nonebot_plugin_session_orm_sessionmodel 不存在")
+    if "nonebot_plugin_uninfo_botmodel" not in table_names:
+        raise ValueError("表 nonebot_plugin_uninfo_botmodel 不存在")
+    if "nonebot_plugin_uninfo_scenemodel" not in table_names:
+        raise ValueError("表 nonebot_plugin_uninfo_scenemodel 不存在")
+    if "nonebot_plugin_uninfo_usermodel" not in table_names:
+        raise ValueError("表 nonebot_plugin_uninfo_usermodel 不存在")
     if "nonebot_plugin_uninfo_sessionmodel" not in table_names:
         raise ValueError("表 nonebot_plugin_uninfo_sessionmodel 不存在")
     if "nonebot_session_to_uninfo_id_map" not in table_names:
@@ -56,6 +62,7 @@ class _SupportScope(StrEnum):
     feishu = "Feishu"
     dodo = "DoDo"
     kook = "Kaiheila"
+    mail = "Mail"
     minecraft = "Minecraft"
     github = "GitHub"
     console = "Console"
@@ -160,6 +167,9 @@ def get_id_map(session_ids: list[int]) -> dict[int, int]:
     Base.prepare(autoload_with=conn)
     IdMap = Base.classes.nonebot_session_to_uninfo_id_map
     SessionModel = Base.classes.nonebot_plugin_session_orm_sessionmodel
+    BotModel = Base.classes.nonebot_plugin_uninfo_botmodel
+    SceneModel = Base.classes.nonebot_plugin_uninfo_scenemodel
+    UserModel = Base.classes.nonebot_plugin_uninfo_usermodel
     UninfoModel = Base.classes.nonebot_plugin_uninfo_sessionmodel
 
     id_map_dict: dict[int, int] = {}
@@ -190,23 +200,97 @@ def get_id_map(session_ids: list[int]) -> dict[int, int]:
             scene_type, scene_id, parent_scene_type, parent_scene_id = _level_to_scene(
                 level, id1, id2, id3
             )
-            scene_data = {}
-            parent_scene_data = None
             user_id = id1
-            user_data = {}
-            member_data = None
+
+            bot_model = db_session.scalars(
+                sa.select(BotModel).where(
+                    sa.and_(BotModel.self_id == self_id, BotModel.adapter == adapter)
+                )
+            ).one_or_none()
+            if bot_model:
+                bot_persist_id = bot_model.id
+            else:
+                bot_model = BotModel(self_id=self_id, adapter=adapter, scope=scope)
+                db_session.add(bot_model)
+                db_session.commit()
+                db_session.refresh(bot_model)
+                bot_persist_id = bot_model.id
+
+            scene_model = db_session.scalars(
+                sa.select(SceneModel).where(
+                    sa.and_(
+                        SceneModel.bot_persist_id == bot_persist_id,
+                        SceneModel.scene_id == scene_id,
+                        SceneModel.scene_type == scene_type,
+                    )
+                )
+            ).one_or_none()
+            if scene_model:
+                scene_persist_id = scene_model.id
+            else:
+                parent_scene_model = db_session.scalars(
+                    sa.select(SceneModel).where(
+                        sa.and_(
+                            SceneModel.bot_persist_id == bot_persist_id,
+                            SceneModel.scene_id == parent_scene_id,
+                            SceneModel.scene_type == parent_scene_type,
+                        )
+                    )
+                ).one_or_none()
+                if parent_scene_model:
+                    parent_scene_persist_id = parent_scene_model.id
+                else:
+                    parent_scene_model = SceneModel(
+                        bot_persist_id=bot_persist_id,
+                        parent_scene_persist_id=None,
+                        scene_id=parent_scene_id,
+                        scene_type=parent_scene_type,
+                        scene_data={},
+                    )
+                    db_session.add(parent_scene_model)
+                    db_session.commit()
+                    db_session.refresh(parent_scene_model)
+                    parent_scene_persist_id = parent_scene_model.id
+
+                scene_model = SceneModel(
+                    bot_persist_id=bot_persist_id,
+                    parent_scene_persist_id=parent_scene_persist_id,
+                    scene_id=scene_id,
+                    scene_type=scene_type,
+                    scene_data={},
+                )
+                db_session.add(scene_model)
+                db_session.commit()
+                db_session.refresh(scene_model)
+                scene_persist_id = scene_model.id
+
+            user_model = db_session.scalars(
+                sa.select(UserModel).where(
+                    sa.and_(
+                        UserModel.bot_persist_id == bot_persist_id,
+                        UserModel.user_id == user_id,
+                    )
+                )
+            ).one_or_none()
+            if user_model:
+                user_persist_id = user_model.id
+            else:
+                user_model = UserModel(
+                    bot_persist_id=bot_persist_id,
+                    user_id=user_id,
+                    user_data={},
+                )
+                db_session.add(user_model)
+                db_session.commit()
+                db_session.refresh(user_model)
+                user_persist_id = user_model.id
 
             uninfo_model = db_session.scalars(
                 sa.select(UninfoModel).where(
                     sa.and_(
-                        UninfoModel.self_id == self_id,
-                        UninfoModel.adapter == adapter,
-                        UninfoModel.scope == scope,
-                        UninfoModel.scene_id == scene_id,
-                        UninfoModel.scene_type == scene_type,
-                        UninfoModel.parent_scene_id == parent_scene_id,
-                        UninfoModel.parent_scene_type == parent_scene_type,
-                        UninfoModel.user_id == user_id,
+                        UninfoModel.bot_persist_id == bot_persist_id,
+                        UninfoModel.scene_persist_id == scene_persist_id,
+                        UninfoModel.user_persist_id == user_persist_id,
                     )
                 )
             ).one_or_none()
@@ -214,18 +298,10 @@ def get_id_map(session_ids: list[int]) -> dict[int, int]:
                 uninfo_id = uninfo_model.id
             else:
                 uninfo_model = UninfoModel(
-                    self_id=self_id,
-                    adapter=adapter,
-                    scope=scope,
-                    scene_id=scene_id,
-                    scene_type=scene_type,
-                    scene_data=scene_data,
-                    parent_scene_id=parent_scene_id,
-                    parent_scene_type=parent_scene_type,
-                    parent_scene_data=parent_scene_data,
-                    user_id=user_id,
-                    user_data=user_data,
-                    member_data=member_data,
+                    bot_persist_id=bot_persist_id,
+                    scene_persist_id=scene_persist_id,
+                    user_persist_id=user_persist_id,
+                    member_data=None,
                 )
                 db_session.add(uninfo_model)
                 db_session.commit()
