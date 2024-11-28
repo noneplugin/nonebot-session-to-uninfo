@@ -228,29 +228,32 @@ def get_id_map(session_ids: list[int]) -> dict[int, int]:
             if scene_model:
                 scene_persist_id = scene_model.id
             else:
-                parent_scene_model = db_session.scalars(
-                    sa.select(SceneModel).where(
-                        sa.and_(
-                            SceneModel.bot_persist_id == bot_persist_id,
-                            SceneModel.scene_id == parent_scene_id,
-                            SceneModel.scene_type == parent_scene_type,
+                if parent_scene_id:
+                    parent_scene_model = db_session.scalars(
+                        sa.select(SceneModel).where(
+                            sa.and_(
+                                SceneModel.bot_persist_id == bot_persist_id,
+                                SceneModel.scene_id == parent_scene_id,
+                                SceneModel.scene_type == parent_scene_type,
+                            )
                         )
-                    )
-                ).one_or_none()
-                if parent_scene_model:
-                    parent_scene_persist_id = parent_scene_model.id
+                    ).one_or_none()
+                    if parent_scene_model:
+                        parent_scene_persist_id = parent_scene_model.id
+                    else:
+                        parent_scene_model = SceneModel(
+                            bot_persist_id=bot_persist_id,
+                            parent_scene_persist_id=None,
+                            scene_id=parent_scene_id,
+                            scene_type=parent_scene_type,
+                            scene_data={},
+                        )
+                        db_session.add(parent_scene_model)
+                        db_session.commit()
+                        db_session.refresh(parent_scene_model)
+                        parent_scene_persist_id = parent_scene_model.id
                 else:
-                    parent_scene_model = SceneModel(
-                        bot_persist_id=bot_persist_id,
-                        parent_scene_persist_id=None,
-                        scene_id=parent_scene_id,
-                        scene_type=parent_scene_type,
-                        scene_data={},
-                    )
-                    db_session.add(parent_scene_model)
-                    db_session.commit()
-                    db_session.refresh(parent_scene_model)
-                    parent_scene_persist_id = parent_scene_model.id
+                    parent_scene_persist_id = None
 
                 scene_model = SceneModel(
                     bot_persist_id=bot_persist_id,
