@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nonebot_session_to_uninfo"
-version = "0.0.1"
+version = "0.0.2"
 description = "session 插件到 uninfo 插件的 orm 迁移工具"
 authors = ["meetwq <meetwq@gmail.com>"]
 license = "MIT"

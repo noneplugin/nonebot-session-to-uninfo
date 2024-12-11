@@ -193,6 +193,8 @@ def get_id_map(session_ids: list[int]) -> dict[int, int]:
             id1 = session_model.id1
             id2 = session_model.id2
             id3 = session_model.id3
+            if id1 == "":
+                id1 = bot_id
 
             self_id = bot_id
             adapter = bot_type
